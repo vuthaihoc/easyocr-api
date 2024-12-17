@@ -30,6 +30,12 @@ async def upload_file():
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
 
+    # Lấy các tham số từ query
+    paragraph = request.args.get('paragraph', 'False').lower() == 'true'
+    output_format = request.args.get('output_format', 'json')
+    decoder = request.args.get('decoder', 'greedy')
+    merge_texts = request.args.get('merge_texts', 'False').lower() == 'true'
+
     if file:
         # Read the image file directly into memory
         image_bytes = file.read()
@@ -39,18 +45,20 @@ async def upload_file():
         # Perform OCR
         json_result = reader.readtext(
             image_np,
-            paragraph=True,
-            output_format='json',
+            decoder=decoder,
+            paragraph=paragraph,
+            output_format=output_format,
         )
 
-        # Process result to return text
-        # extracted_text = [text[1] for text in result]
+        if merge_texts is False:
+            return json_result
+
         texts = extract_texts(json_result)
 
-        # return jsonify({"extracted_text": extracted_text})
-        return {"texts" : "\n".join(texts), "boxes" : json_result}
+        return "\n".join(texts)
 
     return jsonify({"error": "File upload failed"}), 500
+
 
 def extract_texts(json_array):
     texts = []
@@ -60,6 +68,7 @@ def extract_texts(json_array):
         # Lấy trường 'text' và thêm vào danh sách
         texts.append(parsed_item['text'])
     return texts
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
