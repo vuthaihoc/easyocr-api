@@ -4,6 +4,7 @@ import numpy as np
 from PIL import Image
 import io
 import os
+import json
 
 app = Flask(__name__)
 
@@ -11,22 +12,24 @@ app = Flask(__name__)
 USE_GPU = os.getenv('USE_GPU', 'False').lower() in ('true', '1', 't')
 
 # Initialize EasyOCR reader
-reader = easyocr.Reader(['en','vi'], gpu=USE_GPU)  # Use GPU if specified in environment variable
+reader = easyocr.Reader(['en', 'vi'], gpu=USE_GPU)  # Use GPU if specified in environment variable
+
 
 @app.route('/health', methods=['GET'])
 async def health_check():
     return jsonify({"status": "healthy"}), 200
 
+
 @app.route('/read', methods=['POST'])
 async def upload_file():
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
-    
+
     file = request.files['file']
-    
+
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
-    
+
     if file:
         # Read the image file directly into memory
         image_bytes = file.read()
@@ -34,15 +37,29 @@ async def upload_file():
         image_np = np.array(image)
 
         # Perform OCR
-        json_result = reader.readtext(image_np, output_format = 'json')
-        
+        json_result = reader.readtext(
+            image_np,
+            paragraph=True,
+            output_format='json',
+        )
+
         # Process result to return text
-        #extracted_text = [text[1] for text in result]
-        
-        #return jsonify({"extracted_text": extracted_text})
-        return json_result
-    
+        # extracted_text = [text[1] for text in result]
+        texts = extract_texts(json_result)
+
+        # return jsonify({"extracted_text": extracted_text})
+        return {"texts" : "\n".join(texts), "boxes" : json_result}
+
     return jsonify({"error": "File upload failed"}), 500
+
+def extract_texts(json_array):
+    texts = []
+    for item in json_array:
+        # Phân tích cú pháp chuỗi JSON
+        parsed_item = json.loads(item)
+        # Lấy trường 'text' và thêm vào danh sách
+        texts.append(parsed_item['text'])
+    return texts
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
